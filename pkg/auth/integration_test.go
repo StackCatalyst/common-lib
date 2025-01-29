@@ -49,19 +49,21 @@ func (s *mockService) HandleGRPC(ctx context.Context, req interface{}) (interfac
 	return map[string]interface{}{"user_id": userID, "roles": roles}, nil
 }
 
-func setupTokenManager(t *testing.T) *TokenManager {
+func setupIntegrationTokenManager(t *testing.T) *TokenManager {
 	cfg := DefaultConfig()
 	cfg.Token.AccessTokenSecret = "test-access-secret"
 	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+	cfg.RBAC.DefaultRole = "user"
+	cfg.RBAC.SuperAdminRole = "admin"
 
-	tm, err := NewTokenManager(cfg)
+	tm, err := NewTokenManager(cfg, newTestMetricsReporter())
 	require.NoError(t, err)
 	return tm
 }
 
 func TestIntegrationAuthFlow(t *testing.T) {
 	// Setup
-	tm := setupTokenManager(t)
+	tm := setupIntegrationTokenManager(t)
 
 	rbac := NewRBAC()
 	require.NoError(t, rbac.AddRole(RoleAdmin))
@@ -99,7 +101,6 @@ func TestIntegrationAuthFlow(t *testing.T) {
 		assert.Contains(t, mockSvc.roles, string(RoleAdmin))
 
 		// Test gRPC
-		mockSvc = &mockService{} // Reset mock
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{
 			"authorization": "Bearer " + adminToken,
 		}))
@@ -107,12 +108,12 @@ func TestIntegrationAuthFlow(t *testing.T) {
 		unaryInterceptor := AuthUnaryInterceptor(tm)
 		rbacInterceptor := RBACUnaryInterceptor(rbac, ResourceDocument, ActionWrite)
 
-		// Chain interceptors manually for testing
-		_, err := unaryInterceptor(ctx, nil, nil, func(ctx context.Context, req interface{}) (interface{}, error) {
+		resp, err := unaryInterceptor(ctx, nil, nil, func(ctx context.Context, req interface{}) (interface{}, error) {
 			return rbacInterceptor(ctx, req, nil, mockSvc.HandleGRPC)
 		})
 
 		require.NoError(t, err)
+		assert.NotNil(t, resp)
 		assert.Equal(t, "admin-user", mockSvc.userID)
 		assert.Contains(t, mockSvc.roles, string(RoleAdmin))
 	})
@@ -123,7 +124,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 		// Test HTTP
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
-		router.GET("/docs/read",
+		router.GET("/docs",
 			AuthMiddleware(tm),
 			RequireRole(rbac, RoleUser),
 			RequirePermission(rbac, ResourceDocument, ActionRead),
@@ -131,7 +132,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 		)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("GET", "/docs/read", nil)
+		req, _ := http.NewRequest("GET", "/docs", nil)
 		req.Header.Set("Authorization", "Bearer "+userToken)
 		router.ServeHTTP(w, req)
 
@@ -140,7 +141,6 @@ func TestIntegrationAuthFlow(t *testing.T) {
 		assert.Contains(t, mockSvc.roles, string(RoleUser))
 
 		// Test gRPC
-		mockSvc = &mockService{} // Reset mock
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{
 			"authorization": "Bearer " + userToken,
 		}))
@@ -148,11 +148,12 @@ func TestIntegrationAuthFlow(t *testing.T) {
 		unaryInterceptor := AuthUnaryInterceptor(tm)
 		rbacInterceptor := RBACUnaryInterceptor(rbac, ResourceDocument, ActionRead)
 
-		_, err := unaryInterceptor(ctx, nil, nil, func(ctx context.Context, req interface{}) (interface{}, error) {
+		resp, err := unaryInterceptor(ctx, nil, nil, func(ctx context.Context, req interface{}) (interface{}, error) {
 			return rbacInterceptor(ctx, req, nil, mockSvc.HandleGRPC)
 		})
 
 		require.NoError(t, err)
+		assert.NotNil(t, resp)
 		assert.Equal(t, "regular-user", mockSvc.userID)
 		assert.Contains(t, mockSvc.roles, string(RoleUser))
 	})
@@ -160,7 +161,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 	t.Run("permission denied cases", func(t *testing.T) {
 		mockSvc := &mockService{}
 
-		// Test HTTP - User trying to access admin endpoint
+		// Test HTTP
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
 		router.GET("/admin/docs",
@@ -177,7 +178,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
 
-		// Test gRPC - User trying to write documents
+		// Test gRPC
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.New(map[string]string{
 			"authorization": "Bearer " + userToken,
 		}))
@@ -196,7 +197,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 
 func TestIntegrationStreamingAuthFlow(t *testing.T) {
 	// Setup
-	tm := setupTokenManager(t)
+	tm := setupIntegrationTokenManager(t)
 
 	rbac := NewRBAC()
 	require.NoError(t, rbac.AddRole(RoleAdmin))

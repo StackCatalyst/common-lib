@@ -12,7 +12,14 @@ import (
 )
 
 func setupTestMiddleware(t *testing.T) (*TokenManager, *RBAC) {
-	tm := setupTokenManager(t)
+	cfg := DefaultConfig()
+	cfg.Token.AccessTokenSecret = "test-access-secret"
+	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+	cfg.RBAC.DefaultRole = "user"
+	cfg.RBAC.SuperAdminRole = "admin"
+
+	tm, err := NewTokenManager(cfg, newTestMetricsReporter())
+	require.NoError(t, err)
 	rbac := NewRBAC()
 	return tm, rbac
 }

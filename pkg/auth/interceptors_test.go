@@ -23,7 +23,14 @@ func (m *mockServerStream) Context() context.Context {
 }
 
 func setupTestInterceptors(t *testing.T) *TokenManager {
-	tm := setupTokenManager(t)
+	cfg := DefaultConfig()
+	cfg.Token.AccessTokenSecret = "test-access-secret"
+	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+	cfg.RBAC.DefaultRole = "user"
+	cfg.RBAC.SuperAdminRole = "admin"
+
+	tm, err := NewTokenManager(cfg, newTestMetricsReporter())
+	require.NoError(t, err)
 	return tm
 }
 

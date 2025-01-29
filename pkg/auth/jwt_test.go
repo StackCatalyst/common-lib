@@ -2,157 +2,134 @@ package auth
 
 import (
 	"testing"
+	"time"
 
+	"github.com/StackCatalyst/common-lib/pkg/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewTokenManager(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  Config
-		wantErr bool
-	}{
-		{
-			name: "valid config",
-			config: func() Config {
-				cfg := DefaultConfig()
-				cfg.Token.AccessTokenSecret = "test-access-secret"
-				cfg.Token.RefreshTokenSecret = "test-refresh-secret"
-				return cfg
-			}(),
-			wantErr: false,
-		},
-		{
-			name: "empty access secret",
-			config: func() Config {
-				cfg := DefaultConfig()
-				cfg.Token.RefreshTokenSecret = "test-refresh-secret"
-				return cfg
-			}(),
-			wantErr: true,
-		},
-		{
-			name: "empty refresh secret",
-			config: func() Config {
-				cfg := DefaultConfig()
-				cfg.Token.AccessTokenSecret = "test-access-secret"
-				return cfg
-			}(),
-			wantErr: true,
-		},
-	}
+func newTestMetricsReporter() *metrics.Reporter {
+	registry := prometheus.NewRegistry()
+	return metrics.New(metrics.Options{
+		Namespace: "test",
+		Subsystem: "auth",
+		Registry:  registry,
+	})
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tm, err := NewTokenManager(tt.config)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, tm)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, tm)
-			}
-		})
-	}
+func setupTestTokenManager(t *testing.T) *TokenManager {
+	config := Config{}
+	config.Token.AccessTokenSecret = "test-access-secret"
+	config.Token.RefreshTokenSecret = "test-refresh-secret"
+	config.Token.AccessTokenDuration = 15 * time.Minute
+	config.Token.RefreshTokenDuration = 24 * time.Hour
+	config.RBAC.DefaultRole = "user"
+	config.RBAC.SuperAdminRole = "admin"
+
+	tm, err := NewTokenManager(config, newTestMetricsReporter())
+	require.NoError(t, err)
+	require.NotNil(t, tm)
+	return tm
+}
+
+func TestNewTokenManager(t *testing.T) {
+	t.Run("valid config", func(t *testing.T) {
+		config := Config{}
+		config.Token.AccessTokenSecret = "test-access-secret"
+		config.Token.RefreshTokenSecret = "test-refresh-secret"
+		config.Token.AccessTokenDuration = 15 * time.Minute
+		config.Token.RefreshTokenDuration = 24 * time.Hour
+		config.RBAC.DefaultRole = "user"
+		config.RBAC.SuperAdminRole = "admin"
+
+		tm, err := NewTokenManager(config, newTestMetricsReporter())
+		require.NoError(t, err)
+		require.NotNil(t, tm)
+	})
+
+	t.Run("empty access secret", func(t *testing.T) {
+		config := Config{}
+		config.Token.RefreshTokenSecret = "test-refresh-secret"
+		config.RBAC.DefaultRole = "user"
+		config.RBAC.SuperAdminRole = "admin"
+
+		tm, err := NewTokenManager(config, newTestMetricsReporter())
+		assert.Error(t, err)
+		assert.Nil(t, tm)
+	})
+
+	t.Run("empty refresh secret", func(t *testing.T) {
+		config := Config{}
+		config.Token.AccessTokenSecret = "test-access-secret"
+		config.RBAC.DefaultRole = "user"
+		config.RBAC.SuperAdminRole = "admin"
+
+		tm, err := NewTokenManager(config, newTestMetricsReporter())
+		assert.Error(t, err)
+		assert.Nil(t, tm)
+	})
 }
 
 func TestTokenGeneration(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.Token.AccessTokenSecret = "test-access-secret"
-	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+	tm := setupTestTokenManager(t)
 
-	tm, err := NewTokenManager(cfg)
-	require.NoError(t, err)
+	userID := "test-user"
+	roles := []string{"admin", "user"}
 
 	// Test access token generation
-	accessToken, err := tm.GenerateAccessToken("user123", []string{"admin"})
+	accessToken, err := tm.GenerateAccessToken(userID, roles)
 	require.NoError(t, err)
-	assert.NotEmpty(t, accessToken)
+	require.NotEmpty(t, accessToken)
 
 	// Test refresh token generation
-	refreshToken, err := tm.GenerateRefreshToken("user123")
+	refreshToken, err := tm.GenerateRefreshToken(userID, roles)
 	require.NoError(t, err)
-	assert.NotEmpty(t, refreshToken)
+	require.NotEmpty(t, refreshToken)
 }
 
 func TestTokenValidation(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.Token.AccessTokenSecret = "test-access-secret"
-	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+	tm := setupTestTokenManager(t)
 
-	tm, err := NewTokenManager(cfg)
-	require.NoError(t, err)
+	userID := "test-user"
+	roles := []string{"admin", "user"}
 
-	// Generate tokens for testing
-	userID := "user123"
-	roles := []string{"admin"}
-	accessToken, err := tm.GenerateAccessToken(userID, roles)
-	require.NoError(t, err)
+	t.Run("valid access token", func(t *testing.T) {
+		token, err := tm.GenerateAccessToken(userID, roles)
+		require.NoError(t, err)
 
-	refreshToken, err := tm.GenerateRefreshToken(userID)
-	require.NoError(t, err)
+		claims, err := tm.ValidateAccessToken(token)
+		require.NoError(t, err)
+		assert.Equal(t, userID, claims.UserID)
+		assert.Equal(t, roles, claims.Roles)
+		assert.Equal(t, AccessToken, claims.TokenType)
+	})
 
-	tests := []struct {
-		name      string
-		token     string
-		validate  func(string) (*Claims, error)
-		wantErr   bool
-		checkFunc func(*Claims)
-	}{
-		{
-			name:     "valid access token",
-			token:    accessToken,
-			validate: tm.ValidateAccessToken,
-			wantErr:  false,
-			checkFunc: func(claims *Claims) {
-				assert.Equal(t, userID, claims.UserID)
-				assert.Equal(t, roles, claims.Roles)
-				assert.Equal(t, AccessToken, claims.TokenType)
-			},
-		},
-		{
-			name:     "valid refresh token",
-			token:    refreshToken,
-			validate: tm.ValidateRefreshToken,
-			wantErr:  false,
-			checkFunc: func(claims *Claims) {
-				assert.Equal(t, userID, claims.UserID)
-				assert.Empty(t, claims.Roles)
-				assert.Equal(t, RefreshToken, claims.TokenType)
-			},
-		},
-		{
-			name:     "invalid token format",
-			token:    "invalid-token",
-			validate: tm.ValidateAccessToken,
-			wantErr:  true,
-		},
-		{
-			name:     "empty token",
-			token:    "",
-			validate: tm.ValidateAccessToken,
-			wantErr:  true,
-		},
-		{
-			name:     "wrong signing method",
-			token:    "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3MDY1MDI0MDAsImlhdCI6MTcwNjQ5ODgwMCwibmJmIjoxNzA2NDk4ODAwLCJ1aWQiOiJ1c2VyMTIzIiwicm9sZXMiOlsiYWRtaW4iXSwidHlwZSI6ImFjY2VzcyJ9.",
-			validate: tm.ValidateAccessToken,
-			wantErr:  true,
-		},
-	}
+	t.Run("valid refresh token", func(t *testing.T) {
+		token, err := tm.GenerateRefreshToken(userID, roles)
+		require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			claims, err := tt.validate(tt.token)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, claims)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, claims)
-				tt.checkFunc(claims)
-			}
-		})
-	}
+		claims, err := tm.ValidateRefreshToken(token)
+		require.NoError(t, err)
+		assert.Equal(t, userID, claims.UserID)
+		assert.Equal(t, roles, claims.Roles)
+		assert.Equal(t, RefreshToken, claims.TokenType)
+	})
+
+	t.Run("invalid token format", func(t *testing.T) {
+		_, err := tm.ValidateAccessToken("invalid-token")
+		assert.Error(t, err)
+	})
+
+	t.Run("empty token", func(t *testing.T) {
+		_, err := tm.ValidateAccessToken("")
+		assert.Error(t, err)
+	})
+
+	t.Run("wrong signing method", func(t *testing.T) {
+		token := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.EkN-DOsnsuRjRO6BxXemmJDm3HbxrbRzXglbN2S4sOkopdU4IsDxTI8jO19W_A4K8ZPJijNLis4EZsHeY559a4DFOd50_OqgHGuERTqYZyuhtF39yxJPAjUESwxk2J5k_4zM3O-vtd1Ghyo4IbqKKSy6J9mTniYJPenn5-HIirE"
+		_, err := tm.ValidateAccessToken(token)
+		assert.Error(t, err)
+	})
 }
