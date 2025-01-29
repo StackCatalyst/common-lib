@@ -9,9 +9,12 @@
 - Package documentation and usage examples
 - Integration with core error handling framework
 - Structured logging for authentication events (aligned with pkg/logging)
+- Configuration management for token settings (aligned with pkg/config)
+  - Token duration and secret configuration
+  - RBAC role hierarchy and defaults
+  - Rate limiting settings
 
 ## Next Steps
-- Implement configuration management for token settings (aligned with pkg/config)
 - Add metrics reporting for authentication operations
 - Add rate limiting through cache management (using pkg/cache)
 

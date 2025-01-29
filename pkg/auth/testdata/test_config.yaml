@@ -1,0 +1,19 @@
+# Test configuration for auth package
+auth:
+  token:
+    access_duration: 15m
+    refresh_duration: 24h
+    access_secret: test-access-secret
+    refresh_secret: test-refresh-secret
+
+  rbac:
+    default_role: user
+    super_admin_role: admin
+    role_hierarchy:
+      admin: ["user"]
+      user: []
+
+  rate_limit:
+    enabled: true
+    requests_per_second: 10
+    burst_size: 20 
