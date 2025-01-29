@@ -4,7 +4,7 @@ A foundational Go library providing essential components for building robust mic
 
 ## Overview
 
-This library provides a set of common utilities and patterns used across TerraOrbis services, ensuring consistency, reliability, and maintainability.
+This library provides a set of common utilities and patterns used across TerraOrbis services, ensuring consistency, reliability, and maintainability. This is a private library owned by StackCatalyst and is not intended for public distribution.
 
 ## Components
 
@@ -53,13 +53,7 @@ dbHost := cfg.GetString("database.host")
 serverPort := cfg.GetInt("server.port")
 ```
 
-## Installation
-
-```bash
-go get github.com/StackCatalyst/common-lib
-```
-
-## Usage
+## Internal Usage
 
 Import the required packages:
 
@@ -149,14 +143,13 @@ go test ./pkg/logging -v
 go test ./pkg/config -v
 ```
 
-## Contributing
+## Internal Contributing Guidelines
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Create a feature branch (`git checkout -b feature/amazing-feature`)
+2. Commit your changes (`git commit -m 'feat: Add some amazing feature'`)
+3. Push to the branch (`git push origin feature/amazing-feature`)
+4. Create a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is proprietary software owned by StackCatalyst. All rights reserved. See the LICENSE file for details.
