@@ -6,11 +6,21 @@ import (
 	"time"
 
 	"github.com/StackCatalyst/common-lib/pkg/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMetricsReporter(t *testing.T) {
-	reporter := metrics.New(metrics.DefaultOptions())
+func newAuthTestMetricsReporter() *metrics.Reporter {
+	registry := prometheus.NewRegistry()
+	return metrics.New(metrics.Options{
+		Namespace: "test",
+		Subsystem: "auth",
+		Registry:  registry,
+	})
+}
+
+func TestAuthMetricsReporter(t *testing.T) {
+	reporter := newAuthTestMetricsReporter()
 	metricsReporter := NewMetricsReporter(reporter)
 	require.NotNil(t, metricsReporter)
 
