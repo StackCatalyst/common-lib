@@ -25,6 +25,7 @@ const (
 	ActionUpdate Action = "update"
 	ActionDelete Action = "delete"
 	ActionList   Action = "list"
+	ActionWrite  Action = "write"
 
 	// Special actions
 	ActionAll Action = "*"
