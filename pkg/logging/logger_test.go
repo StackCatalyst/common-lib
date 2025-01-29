@@ -91,6 +91,38 @@ func createTestLogger(w io.Writer) (*Logger, error) {
 	return &Logger{zap: zap.New(core)}, nil
 }
 
+func TestNewFromZap(t *testing.T) {
+	tests := []struct {
+		name      string
+		zapLogger *zap.Logger
+		wantErr   bool
+	}{
+		{
+			name:      "valid zap logger",
+			zapLogger: zap.NewExample(),
+			wantErr:   false,
+		},
+		{
+			name:      "nil zap logger",
+			zapLogger: nil,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger, err := NewFromZap(tt.zapLogger)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, logger)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, logger)
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	// Run tests
 	code := m.Run()

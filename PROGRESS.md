@@ -8,9 +8,9 @@
 - Integration tests for HTTP middleware and gRPC interceptors
 - Package documentation and usage examples
 - Integration with core error handling framework
+- Structured logging for authentication events (aligned with pkg/logging)
 
 ## Next Steps
-- Add structured logging for authentication events (aligned with pkg/logging)
 - Implement configuration management for token settings (aligned with pkg/config)
 - Add metrics reporting for authentication operations
 - Add rate limiting through cache management (using pkg/cache)

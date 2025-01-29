@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+	"errors"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -68,6 +69,14 @@ func New(cfg Config) (*Logger, error) {
 	}
 
 	return &Logger{zap: logger}, nil
+}
+
+// NewFromZap creates a new logger instance from an existing zap logger
+func NewFromZap(zapLogger *zap.Logger) (*Logger, error) {
+	if zapLogger == nil {
+		return nil, errors.New("zap logger cannot be nil")
+	}
+	return &Logger{zap: zapLogger}, nil
 }
 
 // With creates a child logger with additional fields
