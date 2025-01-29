@@ -2,7 +2,6 @@ package auth
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,42 +9,44 @@ import (
 
 func TestNewTokenManager(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      TokenManagerConfig
-		expectError bool
+		name    string
+		config  Config
+		wantErr bool
 	}{
 		{
 			name: "valid config",
-			config: TokenManagerConfig{
-				AccessSecret:  "test-access-secret",
-				RefreshSecret: "test-refresh-secret",
-				AccessTTL:     15 * time.Minute,
-				RefreshTTL:    7 * 24 * time.Hour,
-			},
-			expectError: false,
+			config: func() Config {
+				cfg := DefaultConfig()
+				cfg.Token.AccessTokenSecret = "test-access-secret"
+				cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+				return cfg
+			}(),
+			wantErr: false,
 		},
 		{
 			name: "empty access secret",
-			config: TokenManagerConfig{
-				AccessSecret:  "",
-				RefreshSecret: "test-refresh-secret",
-			},
-			expectError: true,
+			config: func() Config {
+				cfg := DefaultConfig()
+				cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+				return cfg
+			}(),
+			wantErr: true,
 		},
 		{
 			name: "empty refresh secret",
-			config: TokenManagerConfig{
-				AccessSecret:  "test-access-secret",
-				RefreshSecret: "",
-			},
-			expectError: true,
+			config: func() Config {
+				cfg := DefaultConfig()
+				cfg.Token.AccessTokenSecret = "test-access-secret"
+				return cfg
+			}(),
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tm, err := NewTokenManager(tt.config)
-			if tt.expectError {
+			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, tm)
 			} else {
@@ -57,74 +58,100 @@ func TestNewTokenManager(t *testing.T) {
 }
 
 func TestTokenGeneration(t *testing.T) {
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-access-secret",
-		RefreshSecret: "test-refresh-secret",
-	})
+	cfg := DefaultConfig()
+	cfg.Token.AccessTokenSecret = "test-access-secret"
+	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+
+	tm, err := NewTokenManager(cfg)
 	require.NoError(t, err)
 
-	userID := "test-user"
-	roles := []string{"admin", "user"}
-
-	// Test access token
-	accessToken, err := tm.GenerateAccessToken(userID, roles)
+	// Test access token generation
+	accessToken, err := tm.GenerateAccessToken("user123", []string{"admin"})
 	require.NoError(t, err)
 	assert.NotEmpty(t, accessToken)
 
-	claims, err := tm.ValidateAccessToken(accessToken)
-	require.NoError(t, err)
-	assert.Equal(t, userID, claims.UserID)
-	assert.Equal(t, roles, claims.Roles)
-	assert.Equal(t, AccessToken, claims.TokenType)
-
-	// Test refresh token
-	refreshToken, err := tm.GenerateRefreshToken(userID)
+	// Test refresh token generation
+	refreshToken, err := tm.GenerateRefreshToken("user123")
 	require.NoError(t, err)
 	assert.NotEmpty(t, refreshToken)
-
-	refreshClaims, err := tm.ValidateRefreshToken(refreshToken)
-	require.NoError(t, err)
-	assert.Equal(t, userID, refreshClaims.UserID)
-	assert.Empty(t, refreshClaims.Roles)
-	assert.Equal(t, RefreshToken, refreshClaims.TokenType)
 }
 
 func TestTokenValidation(t *testing.T) {
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-access-secret",
-		RefreshSecret: "test-refresh-secret",
-	})
+	cfg := DefaultConfig()
+	cfg.Token.AccessTokenSecret = "test-access-secret"
+	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+
+	tm, err := NewTokenManager(cfg)
+	require.NoError(t, err)
+
+	// Generate tokens for testing
+	userID := "user123"
+	roles := []string{"admin"}
+	accessToken, err := tm.GenerateAccessToken(userID, roles)
+	require.NoError(t, err)
+
+	refreshToken, err := tm.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 
 	tests := []struct {
-		name        string
-		token       string
-		expectError bool
+		name      string
+		token     string
+		validate  func(string) (*Claims, error)
+		wantErr   bool
+		checkFunc func(*Claims)
 	}{
 		{
-			name:        "invalid token format",
-			token:       "invalid-token",
-			expectError: true,
+			name:     "valid access token",
+			token:    accessToken,
+			validate: tm.ValidateAccessToken,
+			wantErr:  false,
+			checkFunc: func(claims *Claims) {
+				assert.Equal(t, userID, claims.UserID)
+				assert.Equal(t, roles, claims.Roles)
+				assert.Equal(t, AccessToken, claims.TokenType)
+			},
 		},
 		{
-			name:        "empty token",
-			token:       "",
-			expectError: true,
+			name:     "valid refresh token",
+			token:    refreshToken,
+			validate: tm.ValidateRefreshToken,
+			wantErr:  false,
+			checkFunc: func(claims *Claims) {
+				assert.Equal(t, userID, claims.UserID)
+				assert.Empty(t, claims.Roles)
+				assert.Equal(t, RefreshToken, claims.TokenType)
+			},
 		},
 		{
-			name:        "wrong signing method",
-			token:       "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.",
-			expectError: true,
+			name:     "invalid token format",
+			token:    "invalid-token",
+			validate: tm.ValidateAccessToken,
+			wantErr:  true,
+		},
+		{
+			name:     "empty token",
+			token:    "",
+			validate: tm.ValidateAccessToken,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong signing method",
+			token:    "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjE3MDY1MDI0MDAsImlhdCI6MTcwNjQ5ODgwMCwibmJmIjoxNzA2NDk4ODAwLCJ1aWQiOiJ1c2VyMTIzIiwicm9sZXMiOlsiYWRtaW4iXSwidHlwZSI6ImFjY2VzcyJ9.",
+			validate: tm.ValidateAccessToken,
+			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := tm.ValidateAccessToken(tt.token)
-			if tt.expectError {
+			claims, err := tt.validate(tt.token)
+			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Nil(t, claims)
 			} else {
 				assert.NoError(t, err)
+				assert.NotNil(t, claims)
+				tt.checkFunc(claims)
 			}
 		})
 	}

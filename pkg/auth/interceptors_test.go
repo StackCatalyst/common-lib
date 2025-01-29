@@ -22,13 +22,14 @@ func (m *mockServerStream) Context() context.Context {
 	return m.ctx
 }
 
+func setupTestInterceptors(t *testing.T) *TokenManager {
+	tm := setupTokenManager(t)
+	return tm
+}
+
 func TestAuthUnaryInterceptor(t *testing.T) {
 	// Setup
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-secret",
-		RefreshSecret: "refresh-secret",
-	})
-	require.NoError(t, err)
+	tm := setupTestInterceptors(t)
 
 	interceptor := AuthUnaryInterceptor(tm)
 
@@ -161,11 +162,7 @@ func TestRBACUnaryInterceptor(t *testing.T) {
 
 func TestAuthStreamInterceptor(t *testing.T) {
 	// Setup
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-secret",
-		RefreshSecret: "refresh-secret",
-	})
-	require.NoError(t, err)
+	tm := setupTestInterceptors(t)
 
 	interceptor := AuthStreamInterceptor(tm)
 

@@ -49,13 +49,19 @@ func (s *mockService) HandleGRPC(ctx context.Context, req interface{}) (interfac
 	return map[string]interface{}{"user_id": userID, "roles": roles}, nil
 }
 
+func setupTokenManager(t *testing.T) *TokenManager {
+	cfg := DefaultConfig()
+	cfg.Token.AccessTokenSecret = "test-access-secret"
+	cfg.Token.RefreshTokenSecret = "test-refresh-secret"
+
+	tm, err := NewTokenManager(cfg)
+	require.NoError(t, err)
+	return tm
+}
+
 func TestIntegrationAuthFlow(t *testing.T) {
 	// Setup
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-secret",
-		RefreshSecret: "refresh-secret",
-	})
-	require.NoError(t, err)
+	tm := setupTokenManager(t)
 
 	rbac := NewRBAC()
 	require.NoError(t, rbac.AddRole(RoleAdmin))
@@ -190,11 +196,7 @@ func TestIntegrationAuthFlow(t *testing.T) {
 
 func TestIntegrationStreamingAuthFlow(t *testing.T) {
 	// Setup
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-secret",
-		RefreshSecret: "refresh-secret",
-	})
-	require.NoError(t, err)
+	tm := setupTokenManager(t)
 
 	rbac := NewRBAC()
 	require.NoError(t, rbac.AddRole(RoleAdmin))

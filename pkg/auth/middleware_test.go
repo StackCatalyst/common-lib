@@ -11,40 +11,47 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestRouter(tm *TokenManager, rbac *RBAC) *gin.Engine {
+func setupTestMiddleware(t *testing.T) (*TokenManager, *RBAC) {
+	tm := setupTokenManager(t)
+	rbac := NewRBAC()
+	return tm, rbac
+}
+
+func setupTestRouter(tm *TokenManager, rbac *RBAC, t *testing.T) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 
-	// Add test routes
+	// Protected route with auth
 	r.GET("/protected", AuthMiddleware(tm), func(c *gin.Context) {
 		userID, err := GetUserID(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"user_id": userID})
+		require.NoError(t, err)
+		assert.Equal(t, "user123", userID)
+
+		roles, err := GetUserRoles(c.Request.Context())
+		require.NoError(t, err)
+		assert.Equal(t, []string{"admin"}, roles)
+
+		c.Status(http.StatusOK)
 	})
 
-	r.GET("/admin", AuthMiddleware(tm), RequireRole(rbac, RoleAdmin), func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "admin access granted"})
-	})
+	// Admin route with role check
+	if rbac != nil {
+		r.GET("/admin", AuthMiddleware(tm), RequireRole(rbac, "admin"), func(c *gin.Context) {
+			c.Status(http.StatusOK)
+		})
 
-	r.GET("/documents", AuthMiddleware(tm), RequirePermission(rbac, ResourceDocument, ActionRead), func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "document access granted"})
-	})
+		r.GET("/users/write", AuthMiddleware(tm), RequirePermission(rbac, "users", "write"), func(c *gin.Context) {
+			c.Status(http.StatusOK)
+		})
+	}
 
 	return r
 }
 
 func TestAuthMiddleware(t *testing.T) {
 	// Setup
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-secret",
-		RefreshSecret: "refresh-secret",
-	})
-	require.NoError(t, err)
-
-	router := setupTestRouter(tm, nil)
+	tm, _ := setupTestMiddleware(t)
+	router := setupTestRouter(tm, nil, t)
 
 	tests := []struct {
 		name           string
@@ -54,7 +61,7 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "valid token",
 			setupAuth: func() string {
-				token, err := tm.GenerateAccessToken("test-user", []string{"user"})
+				token, err := tm.GenerateAccessToken("user123", []string{"admin"})
 				require.NoError(t, err)
 				return "Bearer " + token
 			},
@@ -70,14 +77,16 @@ func TestAuthMiddleware(t *testing.T) {
 		{
 			name: "invalid token format",
 			setupAuth: func() string {
-				return "Invalid token"
+				return "Bearer invalid-token"
 			},
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name: "invalid bearer format",
 			setupAuth: func() string {
-				return "Bearer"
+				token, err := tm.GenerateAccessToken("user123", []string{"admin"})
+				require.NoError(t, err)
+				return "Invalid " + token
 			},
 			expectedStatus: http.StatusUnauthorized,
 		},
@@ -85,12 +94,16 @@ func TestAuthMiddleware(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/protected", nil)
+			// Create request
+			req := httptest.NewRequest("GET", "/protected", nil)
 			if auth := tt.setupAuth(); auth != "" {
 				req.Header.Set("Authorization", auth)
 			}
 
+			// Create response recorder
+			w := httptest.NewRecorder()
+
+			// Test the middleware
 			router.ServeHTTP(w, req)
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
@@ -99,44 +112,52 @@ func TestAuthMiddleware(t *testing.T) {
 
 func TestRoleMiddleware(t *testing.T) {
 	// Setup
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-secret",
-		RefreshSecret: "refresh-secret",
-	})
-	require.NoError(t, err)
+	tm, rbac := setupTestMiddleware(t)
 
-	rbac := NewRBAC()
-	require.NoError(t, rbac.AddRole(RoleAdmin))
-	require.NoError(t, rbac.AddRole(RoleUser))
+	// Configure RBAC
+	rbac.AddRole("admin")
+	rbac.AddRole("user")
 
-	router := setupTestRouter(tm, rbac)
+	// Create router
+	router := setupTestRouter(tm, rbac, t)
 
 	tests := []struct {
 		name           string
-		userRoles      []string
+		setupAuth      func() string
 		expectedStatus int
 	}{
 		{
-			name:           "admin access granted",
-			userRoles:      []string{"admin"},
+			name: "admin access granted",
+			setupAuth: func() string {
+				token, err := tm.GenerateAccessToken("user123", []string{"admin"})
+				require.NoError(t, err)
+				return "Bearer " + token
+			},
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "admin access denied",
-			userRoles:      []string{"user"},
+			name: "admin access denied",
+			setupAuth: func() string {
+				token, err := tm.GenerateAccessToken("user123", []string{"user"})
+				require.NoError(t, err)
+				return "Bearer " + token
+			},
 			expectedStatus: http.StatusForbidden,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, err := tm.GenerateAccessToken("test-user", tt.userRoles)
-			require.NoError(t, err)
+			// Create request
+			req := httptest.NewRequest("GET", "/admin", nil)
+			if auth := tt.setupAuth(); auth != "" {
+				req.Header.Set("Authorization", auth)
+			}
 
+			// Create response recorder
 			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/admin", nil)
-			req.Header.Set("Authorization", "Bearer "+token)
 
+			// Test the middleware
 			router.ServeHTTP(w, req)
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
@@ -145,45 +166,54 @@ func TestRoleMiddleware(t *testing.T) {
 
 func TestPermissionMiddleware(t *testing.T) {
 	// Setup
-	tm, err := NewTokenManager(TokenManagerConfig{
-		AccessSecret:  "test-secret",
-		RefreshSecret: "refresh-secret",
-	})
-	require.NoError(t, err)
+	tm, rbac := setupTestMiddleware(t)
 
-	rbac := NewRBAC()
-	require.NoError(t, rbac.AddRole(RoleAdmin))
-	require.NoError(t, rbac.AddRole(RoleUser))
-	require.NoError(t, rbac.AddPermission(RoleUser, BuildPermission(ResourceDocument, ActionRead)))
+	// Configure RBAC with proper hierarchy
+	require.NoError(t, rbac.AddRole("user"))
+	require.NoError(t, rbac.AddRole("admin", "user")) // admin inherits from user
+	require.NoError(t, rbac.AddPermission("admin", BuildPermission("users", "write")))
+	require.NoError(t, rbac.AddPermission("user", BuildPermission("users", "read")))
 
-	router := setupTestRouter(tm, rbac)
+	// Create router
+	router := setupTestRouter(tm, rbac, t)
 
 	tests := []struct {
 		name           string
-		userRoles      []string
+		setupAuth      func() string
 		expectedStatus int
 	}{
 		{
-			name:           "user with permission",
-			userRoles:      []string{"user"},
+			name: "user with permission",
+			setupAuth: func() string {
+				token, err := tm.GenerateAccessToken("user123", []string{"admin"})
+				require.NoError(t, err)
+				return "Bearer " + token
+			},
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "user without permission",
-			userRoles:      []string{"guest"},
+			name: "user without permission",
+			setupAuth: func() string {
+				token, err := tm.GenerateAccessToken("user123", []string{"user"})
+				require.NoError(t, err)
+				return "Bearer " + token
+			},
 			expectedStatus: http.StatusForbidden,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, err := tm.GenerateAccessToken("test-user", tt.userRoles)
-			require.NoError(t, err)
+			// Create request
+			req := httptest.NewRequest("GET", "/users/write", nil)
+			if auth := tt.setupAuth(); auth != "" {
+				req.Header.Set("Authorization", auth)
+			}
 
+			// Create response recorder
 			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/documents", nil)
-			req.Header.Set("Authorization", "Bearer "+token)
 
+			// Test the middleware
 			router.ServeHTTP(w, req)
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})

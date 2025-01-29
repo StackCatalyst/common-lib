@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/StackCatalyst/common-lib/pkg/errors"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -28,64 +27,46 @@ type Claims struct {
 
 // TokenManager handles JWT token operations
 type TokenManager struct {
-	accessSecret  []byte
-	refreshSecret []byte
-	accessTTL     time.Duration
-	refreshTTL    time.Duration
-}
-
-// TokenManagerConfig configures the token manager
-type TokenManagerConfig struct {
-	AccessSecret  string
-	RefreshSecret string
-	AccessTTL     time.Duration
-	RefreshTTL    time.Duration
+	config Config
 }
 
 // NewTokenManager creates a new token manager
-func NewTokenManager(config TokenManagerConfig) (*TokenManager, error) {
-	if config.AccessSecret == "" || config.RefreshSecret == "" {
-		return nil, errors.New(errors.ErrValidation, "secrets cannot be empty")
+func NewTokenManager(config Config) (*TokenManager, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
 	}
-
-	if config.AccessTTL == 0 {
-		config.AccessTTL = 15 * time.Minute
-	}
-
-	if config.RefreshTTL == 0 {
-		config.RefreshTTL = 7 * 24 * time.Hour
-	}
-
-	return &TokenManager{
-		accessSecret:  []byte(config.AccessSecret),
-		refreshSecret: []byte(config.RefreshSecret),
-		accessTTL:     config.AccessTTL,
-		refreshTTL:    config.RefreshTTL,
-	}, nil
+	return &TokenManager{config: config}, nil
 }
 
 // GenerateAccessToken generates a new access token
 func (tm *TokenManager) GenerateAccessToken(userID string, roles []string) (string, error) {
-	return tm.generateToken(userID, roles, AccessToken, tm.accessSecret, tm.accessTTL)
+	return tm.generateToken(userID, roles, AccessToken)
 }
 
 // GenerateRefreshToken generates a new refresh token
 func (tm *TokenManager) GenerateRefreshToken(userID string) (string, error) {
-	return tm.generateToken(userID, nil, RefreshToken, tm.refreshSecret, tm.refreshTTL)
+	return tm.generateToken(userID, nil, RefreshToken)
 }
 
 // ValidateAccessToken validates an access token
 func (tm *TokenManager) ValidateAccessToken(tokenString string) (*Claims, error) {
-	return tm.validateToken(tokenString, tm.accessSecret)
+	return tm.validateToken(tokenString, []byte(tm.config.Token.AccessTokenSecret))
 }
 
 // ValidateRefreshToken validates a refresh token
 func (tm *TokenManager) ValidateRefreshToken(tokenString string) (*Claims, error) {
-	return tm.validateToken(tokenString, tm.refreshSecret)
+	return tm.validateToken(tokenString, []byte(tm.config.Token.RefreshTokenSecret))
 }
 
-func (tm *TokenManager) generateToken(userID string, roles []string, tokenType TokenType, secret []byte, ttl time.Duration) (string, error) {
+func (tm *TokenManager) generateToken(userID string, roles []string, tokenType TokenType) (string, error) {
 	now := time.Now()
+	ttl := tm.config.Token.AccessTokenDuration
+	secret := tm.config.Token.AccessTokenSecret
+	if tokenType == RefreshToken {
+		ttl = tm.config.Token.RefreshTokenDuration
+		secret = tm.config.Token.RefreshTokenSecret
+	}
+
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
@@ -98,7 +79,7 @@ func (tm *TokenManager) generateToken(userID string, roles []string, tokenType T
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(secret)
+	return token.SignedString([]byte(secret))
 }
 
 func (tm *TokenManager) validateToken(tokenString string, secret []byte) (*Claims, error) {
@@ -110,12 +91,15 @@ func (tm *TokenManager) validateToken(tokenString string, secret []byte) (*Claim
 	})
 
 	if err != nil {
-		return nil, errors.Wrap(err, errors.ErrUnauthorized, "invalid token")
+		if err.Error() == "token is expired" {
+			return nil, newTokenExpiredError()
+		}
+		return nil, newInvalidTokenError(err.Error())
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 		return claims, nil
 	}
 
-	return nil, errors.New(errors.ErrUnauthorized, "invalid token claims")
+	return nil, newInvalidTokenError("invalid token claims")
 }

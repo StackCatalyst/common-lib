@@ -1,0 +1,33 @@
+# Authentication configuration example
+
+auth:
+  # Token settings
+  token:
+    # Duration for which access tokens are valid (e.g., 15m, 1h, etc.)
+    access_token_duration: 15m
+    # Duration for which refresh tokens are valid
+    refresh_token_duration: 24h
+    # Secret used to sign access tokens (must be secure and unique)
+    access_token_secret: "your-access-token-secret-here"
+    # Secret used to sign refresh tokens (must be secure and unique)
+    refresh_token_secret: "your-refresh-token-secret-here"
+
+  # RBAC settings
+  rbac:
+    # Default role assigned to new users
+    default_role: "user"
+    # Role with all permissions
+    super_admin_role: "admin"
+    # Role hierarchy (higher roles inherit lower roles' permissions)
+    role_hierarchy:
+      admin: ["user"]
+      user: []
+
+  # Rate limiting settings
+  rate_limit:
+    # Whether rate limiting is enabled
+    enabled: true
+    # Maximum number of requests allowed per second
+    requests_per_second: 10
+    # Maximum number of requests allowed to burst
+    burst_size: 20 
