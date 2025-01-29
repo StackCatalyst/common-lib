@@ -11,11 +11,10 @@
 ### Authentication Package Tasks
 - [x] JWT token management
 - [x] RBAC implementation
-- [ ] HTTP middleware
+- [x] HTTP middleware
 - [ ] gRPC interceptors
 
 ## Next Steps
-- Create HTTP middleware
 - Create gRPC interceptors
 - Add integration tests
 - Document authentication usage 
