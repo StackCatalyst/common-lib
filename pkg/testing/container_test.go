@@ -28,13 +28,35 @@ func TestContainer(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("PostgreSQL", func(t *testing.T) {
-		container, err := PostgresContainer(ctx, "test", "user", "password")
+		config := PostgresConfig{
+			Database: "test",
+			User:     "user",
+			Password: "password",
+			Version:  "14-alpine",
+			Port:     "5432/tcp",
+		}
+		container, err := PostgresContainer(ctx, config)
 		require.NoError(t, err)
 		defer container.Stop(ctx)
 
 		host, err := container.GetHost(ctx)
 		require.NoError(t, err)
 		assert.NotEmpty(t, host)
+
+		port, err := container.GetHostPort(ctx, config.Port)
+		require.NoError(t, err)
+		assert.NotEmpty(t, port)
+	})
+
+	t.Run("PostgreSQL Default Config", func(t *testing.T) {
+		config := PostgresConfig{
+			Database: "test",
+			User:     "user",
+			Password: "password",
+		}
+		container, err := PostgresContainer(ctx, config)
+		require.NoError(t, err)
+		defer container.Stop(ctx)
 
 		port, err := container.GetHostPort(ctx, "5432/tcp")
 		require.NoError(t, err)
@@ -67,6 +89,46 @@ func TestContainer(t *testing.T) {
 		port, err := container.GetHostPort(ctx, "4566/tcp")
 		require.NoError(t, err)
 		assert.NotEmpty(t, port)
+	})
+
+	t.Run("Kafka", func(t *testing.T) {
+		config := KafkaConfig{
+			Version:    "3.5",
+			BrokerPort: "9092/tcp",
+			ZookerPort: "2181/tcp",
+			Topics:     []string{"test-topic"},
+			Partitions: 3,
+			Replicas:   1,
+			ExternalIP: "localhost",
+		}
+		container, err := KafkaContainer(ctx, config)
+		require.NoError(t, err)
+		defer container.Stop(ctx)
+
+		host, err := container.GetHost(ctx)
+		require.NoError(t, err)
+		assert.NotEmpty(t, host)
+
+		brokerPort, err := container.GetHostPort(ctx, config.BrokerPort)
+		require.NoError(t, err)
+		assert.NotEmpty(t, brokerPort)
+
+		zookeeperPort, err := container.GetHostPort(ctx, config.ZookerPort)
+		require.NoError(t, err)
+		assert.NotEmpty(t, zookeeperPort)
+	})
+
+	t.Run("Kafka Default Config", func(t *testing.T) {
+		config := KafkaConfig{
+			Topics: []string{"test-topic"},
+		}
+		container, err := KafkaContainer(ctx, config)
+		require.NoError(t, err)
+		defer container.Stop(ctx)
+
+		brokerPort, err := container.GetHostPort(ctx, "9092/tcp")
+		require.NoError(t, err)
+		assert.NotEmpty(t, brokerPort)
 	})
 }
 

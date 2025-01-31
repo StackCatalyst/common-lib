@@ -94,22 +94,38 @@ func (c *Container) Stop(ctx context.Context) error {
 	return c.container.Terminate(ctx)
 }
 
-// PostgresContainer creates a PostgreSQL test container
-func PostgresContainer(ctx context.Context, database, user, password string) (*Container, error) {
-	config := ContainerConfig{
+// PostgresConfig holds PostgreSQL specific configuration
+type PostgresConfig struct {
+	Database string
+	User     string
+	Password string
+	Version  string // e.g., "14-alpine", "15-alpine"
+	Port     string // defaults to 5432/tcp
+}
+
+// PostgresContainer creates a PostgreSQL test container with advanced configuration
+func PostgresContainer(ctx context.Context, config PostgresConfig) (*Container, error) {
+	if config.Version == "" {
+		config.Version = "14-alpine"
+	}
+	if config.Port == "" {
+		config.Port = "5432/tcp"
+	}
+
+	containerConfig := ContainerConfig{
 		Image: "postgres",
-		Tag:   "14-alpine",
+		Tag:   config.Version,
 		Env: map[string]string{
-			"POSTGRES_DB":       database,
-			"POSTGRES_USER":     user,
-			"POSTGRES_PASSWORD": password,
+			"POSTGRES_DB":       config.Database,
+			"POSTGRES_USER":     config.User,
+			"POSTGRES_PASSWORD": config.Password,
 		},
 		Ports: map[string]string{
-			"5432/tcp": "",
+			config.Port: "",
 		},
 		WaitStrategy: wait.ForLog("database system is ready to accept connections"),
 	}
-	return NewContainer(ctx, config)
+	return NewContainer(ctx, containerConfig)
 }
 
 // RedisContainer creates a Redis test container
@@ -140,4 +156,61 @@ func LocalstackContainer(ctx context.Context, services []string) (*Container, er
 		WaitStrategy: wait.ForLog("Ready."),
 	}
 	return NewContainer(ctx, config)
+}
+
+// KafkaConfig holds Kafka specific configuration
+type KafkaConfig struct {
+	Version    string // e.g., "3.5", "3.6"
+	BrokerPort string // defaults to 9092/tcp
+	ZookerPort string // defaults to 2181/tcp
+	Topics     []string
+	Partitions int
+	Replicas   int
+	ExternalIP string // for advertised listeners
+}
+
+// KafkaContainer creates a Kafka test container with Zookeeper
+func KafkaContainer(ctx context.Context, config KafkaConfig) (*Container, error) {
+	if config.Version == "" {
+		config.Version = "3.5"
+	}
+	if config.BrokerPort == "" {
+		config.BrokerPort = "9092/tcp"
+	}
+	if config.ZookerPort == "" {
+		config.ZookerPort = "2181/tcp"
+	}
+	if config.Partitions == 0 {
+		config.Partitions = 1
+	}
+	if config.Replicas == 0 {
+		config.Replicas = 1
+	}
+	if config.ExternalIP == "" {
+		config.ExternalIP = "localhost"
+	}
+
+	containerConfig := ContainerConfig{
+		Image: "confluentinc/cp-kafka",
+		Tag:   config.Version,
+		Env: map[string]string{
+			"KAFKA_BROKER_ID":                                "1",
+			"KAFKA_ZOOKEEPER_CONNECT":                        "localhost:2181",
+			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":           "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT",
+			"KAFKA_ADVERTISED_LISTENERS":                     fmt.Sprintf("PLAINTEXT://%s:%s,PLAINTEXT_HOST://localhost:%s", config.ExternalIP, config.BrokerPort, config.BrokerPort),
+			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR":         "1",
+			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS":         "0",
+			"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR":            "1",
+			"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": "1",
+			"KAFKA_AUTO_CREATE_TOPICS_ENABLE":                "true",
+			"KAFKA_NUM_PARTITIONS":                           fmt.Sprintf("%d", config.Partitions),
+			"KAFKA_DEFAULT_REPLICATION_FACTOR":               fmt.Sprintf("%d", config.Replicas),
+		},
+		Ports: map[string]string{
+			config.BrokerPort: "",
+			config.ZookerPort: "",
+		},
+		WaitStrategy: wait.ForLog("[KafkaServer id=1] started"),
+	}
+	return NewContainer(ctx, containerConfig)
 }
