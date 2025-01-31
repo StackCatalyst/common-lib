@@ -12,6 +12,7 @@
 - Simple transaction handling
 - Core query utilities
 - Cache metrics
+- In-memory cache implementation with TTL and size limits
 
 ## Sprint 2: Testing & Service Communication
 ### Week 1: Essential Testing Framework ✅
@@ -19,6 +20,11 @@
 - Common mocks
 - Core assertions
 - Coverage reporting
+- Test container support
+  - PostgreSQL containers with configurable versions and settings
+  - Redis containers for caching tests
+  - Kafka containers with configurable brokers and topics
+  - Localstack containers for AWS service mocking
 - Metrics reporting system
   - Core metrics package with counters, gauges, histograms, and summaries
   - Authentication metrics for token validation, generation, and permission checks
@@ -45,6 +51,7 @@
 
 ## Notes
 - All core functionality for Sprint 1 and 2 is implemented and tested
+- Testing framework now includes comprehensive container support for integration testing
 - Documentation is complete with examples and best practices
 - Integration with other core libraries is complete
 - Advanced features will be implemented in later phases 
