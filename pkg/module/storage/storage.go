@@ -3,9 +3,78 @@ package storage
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/StackCatalyst/common-lib/pkg/module"
 )
+
+// Filter represents search criteria for listing modules
+type Filter struct {
+	Provider    string   // Cloud provider (aws, azure, gcp)
+	Tags        []string // Module tags
+	NamePattern string   // Module name pattern (supports wildcards)
+	Version     string   // Specific version or constraint
+	Offset      int      // Pagination offset
+	Limit       int      // Pagination limit
+}
+
+// Storage defines the interface for module storage operations
+type Storage interface {
+	// Store saves a module to the storage
+	Store(ctx context.Context, module *module.Module) error
+
+	// Get retrieves a module by its ID and version
+	Get(ctx context.Context, id, version string) (*module.Module, error)
+
+	// List returns modules matching the given filter
+	List(ctx context.Context, filter Filter) ([]*module.Module, error)
+
+	// Delete removes a module from storage
+	Delete(ctx context.Context, id, version string) error
+
+	// GetVersions returns all versions of a module
+	GetVersions(ctx context.Context, id string) ([]string, error)
+
+	// GetLatestVersion returns the latest version of a module
+	GetLatestVersion(ctx context.Context, id string) (string, error)
+
+	// Lock marks a version as immutable
+	Lock(ctx context.Context, id, version string) error
+
+	// GetMetadata retrieves module metadata without content
+	GetMetadata(ctx context.Context, id, version string) (*module.Module, error)
+
+	// UpdateMetadata updates module metadata without changing content
+	UpdateMetadata(ctx context.Context, id, version string, metadata map[string]interface{}) error
+
+	// StoreContent saves module content to storage
+	StoreContent(ctx context.Context, id, version string, content []byte) error
+
+	// GetContent retrieves module content from storage
+	GetContent(ctx context.Context, id, version string) ([]byte, error)
+
+	// Exists checks if a module version exists
+	Exists(ctx context.Context, id, version string) (bool, error)
+
+	// GetDependencies returns all modules that depend on the given module
+	GetDependencies(ctx context.Context, id, version string) ([]*module.Module, error)
+
+	// Close releases any resources held by the storage
+	Close() error
+}
+
+// Stats represents storage statistics
+type Stats struct {
+	TotalModules      int       // Total number of modules
+	TotalVersions     int       // Total number of module versions
+	StorageSize       int64     // Total storage size in bytes
+	LastUpdated       time.Time // Last update timestamp
+	CacheHitRate      float64   // Cache hit rate
+	CacheMissRate     float64   // Cache miss rate
+	AvgResponseTime   float64   // Average response time in milliseconds
+	ErrorRate         float64   // Error rate percentage
+	ActiveConnections int       // Number of active connections
+}
 
 // Backend represents a storage backend for modules
 type Backend interface {
