@@ -32,6 +32,32 @@ type Module struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	// Metadata is additional module metadata
 	Metadata map[string]interface{} `json:"metadata"`
+	// Tests are the module test cases
+	Tests []*Test `json:"tests"`
+}
+
+// Test represents a module test case
+type Test struct {
+	// Name is the test case name
+	Name string `json:"name"`
+	// Description describes what the test verifies
+	Description string `json:"description"`
+	// Variables contains test-specific input variables
+	Variables map[string]interface{} `json:"variables"`
+	// ExpectedOutputs contains expected output values
+	ExpectedOutputs map[string]interface{} `json:"expected_outputs"`
+	// Setup contains setup steps to run before the test
+	Setup []string `json:"setup"`
+	// Teardown contains cleanup steps to run after the test
+	Teardown []string `json:"teardown"`
+	// Assertions contains test assertions
+	Assertions []string `json:"assertions"`
+	// Timeout is the maximum test duration
+	Timeout time.Duration `json:"timeout"`
+	// Skip indicates if the test should be skipped
+	Skip bool `json:"skip"`
+	// SkipReason explains why the test is skipped
+	SkipReason string `json:"skip_reason,omitempty"`
 }
 
 // Variable represents a module input variable
