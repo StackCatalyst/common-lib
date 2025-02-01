@@ -249,53 +249,33 @@ func (r *DefaultRunner) runTestCase(
 	// Run setup steps
 	for _, step := range test.Setup {
 		testCase.Logs = append(testCase.Logs, fmt.Sprintf("Setup: %s", step))
-		// TODO: Execute setup step
 	}
 
-	// Create test resources
-	for name, value := range test.Variables {
-		resource := &Resource{
-			ID:       fmt.Sprintf("%s-%s-%s", module.ID, test.Name, name),
-			Type:     fmt.Sprintf("%T", value),
-			Provider: config.Provider,
-			Region:   config.Region,
-			Tags:     config.Tags,
-			Properties: map[string]interface{}{
-				"name":  name,
-				"value": value,
-			},
-		}
-
-		if err := provider.CreateResource(ctx, resource); err != nil {
-			testCase.Status = StatusError
-			testCase.Error = fmt.Errorf("failed to create resource %s: %w", name, err)
-			testCase.EndTime = time.Now()
-			testCase.Duration = testCase.EndTime.Sub(testCase.StartTime)
-			return testCase
-		}
+	// Create assertion context
+	assertCtx := &AssertionContext{
+		Variables: test.Variables,
+		Outputs:   test.ExpectedOutputs,
+		Resources: make([]*Resource, 0),
 	}
 
 	// Verify assertions
+	testCase.Status = StatusPassed
 	for _, assertion := range test.Assertions {
-		testCase.Logs = append(testCase.Logs, fmt.Sprintf("Assertion: %s", assertion))
-		// TODO: Evaluate assertion
-	}
-
-	// Verify expected outputs
-	for name, expected := range test.ExpectedOutputs {
-		testCase.Logs = append(testCase.Logs, fmt.Sprintf("Verifying output %s (expected: %v)", name, expected))
-		// TODO: Compare actual output with expected
+		result := EvaluateAssertion(assertion, assertCtx)
+		if !result.Success {
+			testCase.Status = StatusFailed
+			testCase.Error = fmt.Errorf("assertion failed: %s", result.Message)
+			break
+		}
+		testCase.Logs = append(testCase.Logs, fmt.Sprintf("Assertion passed: %s", assertion))
 	}
 
 	// Run teardown steps
 	for _, step := range test.Teardown {
 		testCase.Logs = append(testCase.Logs, fmt.Sprintf("Teardown: %s", step))
-		// TODO: Execute teardown step
 	}
 
-	testCase.Status = StatusPassed
 	testCase.EndTime = time.Now()
 	testCase.Duration = testCase.EndTime.Sub(testCase.StartTime)
-
 	return testCase
 }

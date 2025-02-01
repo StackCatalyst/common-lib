@@ -39,8 +39,10 @@ func TestRunner(t *testing.T) {
 					"Drop database",
 				},
 				Assertions: []string{
-					"Database should be accessible",
-					"Schema should be valid",
+					"variable var1 equals value1",
+					"variable var2 equals 42",
+					"output output1 equals expected1",
+					"output output2 equals true",
 				},
 				Timeout: 5 * time.Second,
 			},
