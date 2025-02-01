@@ -16,6 +16,10 @@ type Module struct {
 	Version string `json:"version"`
 	// Description is a brief description of the module
 	Description string `json:"description"`
+	// Author is the module author
+	Author string `json:"author"`
+	// License is the module license
+	License string `json:"license"`
 	// Source is the source code location
 	Source string `json:"source"`
 	// Variables are the input variables for the module
@@ -24,6 +28,8 @@ type Module struct {
 	Outputs []*Output `json:"outputs"`
 	// Dependencies are the module dependencies
 	Dependencies []*Dependency `json:"dependencies"`
+	// Resources are the cloud resources managed by the module
+	Resources []*Resource `json:"resources"`
 	// Tags are searchable tags for the module
 	Tags []string `json:"tags"`
 	// CreatedAt is the creation timestamp
@@ -130,4 +136,26 @@ type Filter struct {
 	Limit int `json:"limit,omitempty"`
 	// Offset is the result offset for pagination
 	Offset int `json:"offset,omitempty"`
+}
+
+// Resource represents a cloud resource
+type Resource struct {
+	// Type is the resource type
+	Type string `json:"type"`
+	// Provider is the cloud provider
+	Provider string `json:"provider"`
+	// Description describes the resource
+	Description string `json:"description"`
+	// Properties are resource properties
+	Properties map[string]*Property `json:"properties"`
+}
+
+// Property represents a resource property
+type Property struct {
+	// Type is the property type
+	Type string `json:"type"`
+	// Description describes the property
+	Description string `json:"description"`
+	// Required indicates if the property is required
+	Required bool `json:"required"`
 }
