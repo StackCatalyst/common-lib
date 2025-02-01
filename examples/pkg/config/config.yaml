@@ -1,0 +1,20 @@
+server:
+  host: localhost
+  port: 8080
+  timeout: 30s
+
+database:
+  host: localhost
+  port: 5432
+  name: myapp
+  user: admin
+  # Password can be overridden by environment variable APP_DATABASE_PASSWORD
+  password: default_password
+
+features:
+  enableCache: true
+  maxRequests: 100
+  allowedUsers:
+    - admin
+    - user1
+    - user2 
