@@ -2,8 +2,11 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   test:
@@ -21,66 +24,140 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
+  version:
+    name: Determine Version
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.semver.outputs.new_version }}
+      version_changed: ${{ steps.semver.outputs.version_changed }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest_tag
+        run: |
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=${latest_tag}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          changelog=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"- %s%n%b")
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$changelog" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Determine version bump
+        id: semver
+        run: |
+          latest_version=${{ steps.latest_tag.outputs.latest_tag }}
+          latest_version=${latest_version#v}
+          
+          IFS='.' read -r major minor patch <<< "$latest_version"
+          
+          # Check commit messages since last tag
+          commits=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"%s")
+          
+          version_changed="false"
+          
+          while IFS= read -r commit; do
+            if [[ "$commit" == *"BREAKING CHANGE:"* ]]; then
+              major=$((major + 1))
+              minor=0
+              patch=0
+              version_changed="true"
+              break
+            elif [[ "$commit" == "feat:"* ]]; then
+              minor=$((minor + 1))
+              patch=0
+              version_changed="true"
+            elif [[ "$commit" == "fix:"* ]]; then
+              patch=$((patch + 1))
+              version_changed="true"
+            fi
+          done <<< "$commits"
+          
+          new_version="v${major}.${minor}.${patch}"
+          
+          echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+          echo "version_changed=${version_changed}" >> $GITHUB_OUTPUT
+
   release:
     name: Create Release
-    needs: test
+    needs: [test, version]
+    if: needs.version.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Generate changelog
-        id: changelog
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: releases } = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 1
-            });
-            
-            const lastRelease = releases[0]?.tag_name || '';
-            const newTag = process.env.GITHUB_REF.replace('refs/tags/', '');
-            
-            const { stdout } = await exec.getExecOutput(
-              'git',
-              ['log', `${lastRelease}..${newTag}`, '--pretty=format:- %s%n%b']
-            );
-            
-            return stdout;
+      - name: Create Release Notes
+        id: release_notes
+        run: |
+          cat << EOF > release_notes.md
+          # Release ${{ needs.version.outputs.new_version }}
+          
+          ## Changes
+          ${{ needs.version.outputs.changelog }}
+          
+          ## Installation
+          \`\`\`bash
+          go get github.com/StackCatalyst/common-lib@${{ needs.version.outputs.new_version }}
+          \`\`\`
+          
+          ## Documentation
+          See [Integration Guide](docs/INTEGRATION.md) for usage instructions.
+          
+          ## Breaking Changes
+          $(echo "${{ needs.version.outputs.changelog }}" | grep "BREAKING CHANGE:" || echo "None")
+          
+          ## Features
+          $(echo "${{ needs.version.outputs.changelog }}" | grep "^feat:" || echo "None")
+          
+          ## Bug Fixes
+          $(echo "${{ needs.version.outputs.changelog }}" | grep "^fix:" || echo "None")
+          EOF
+
+      - name: Create Tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag -a ${{ needs.version.outputs.new_version }} -m "Release ${{ needs.version.outputs.new_version }}"
+          git push origin ${{ needs.version.outputs.new_version }}
 
       - name: Create Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          body: |
-            ## Changes
-            ${{ steps.changelog.outputs.result }}
-            
-            ## Installation
-            ```bash
-            go get github.com/StackCatalyst/common-lib@${{ github.ref }}
-            ```
-            
-            ## Documentation
-            See [Integration Guide](docs/INTEGRATION.md) for usage instructions.
+          tag_name: ${{ needs.version.outputs.new_version }}
+          release_name: Release ${{ needs.version.outputs.new_version }}
+          body_path: release_notes.md
           draft: false
           prerelease: false
 
   notify:
     name: Notify Team
-    needs: release
+    needs: [release, version]
+    if: needs.version.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Send Slack notification
         uses: slackapi/slack-github-action@v1.25.0
         with:
           channel-id: 'releases'
-          slack-message: "New version of common-lib released: ${{ github.ref }}\nSee release notes: ${{ github.event.release.html_url }}"
+          slack-message: |
+            New version of common-lib released: ${{ needs.version.outputs.new_version }}
+            
+            Changes:
+            ${{ needs.version.outputs.changelog }}
+            
+            See full release notes: https://github.com/StackCatalyst/common-lib/releases/tag/${{ needs.version.outputs.new_version }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }} 
