@@ -181,16 +181,19 @@ jobs:
     if: needs.version.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Send Slack notification
-        uses: slackapi/slack-github-action@v1.25.0
+      - name: Send MS Teams notification
+        uses: toko-bifrost/ms-teams-deploy-card@master
         with:
-          channel-id: 'releases'
-          slack-message: |
-            New version of common-lib released: ${{ needs.version.outputs.new_version }}
+          github-token: ${{ github.token }}
+          webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+          title: "New Release: common-lib ${{ needs.version.outputs.new_version }}"
+          color: "00ff00"
+          description: |
+            A new version of common-lib has been released!
             
-            Changes:
+            **Version:** ${{ needs.version.outputs.new_version }}
+            
+            **Changes:**
             ${{ needs.version.outputs.changelog }}
             
-            See full release notes: https://github.com/StackCatalyst/common-lib/releases/tag/${{ needs.version.outputs.new_version }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }} 
+            [View Release Notes](https://github.com/StackCatalyst/common-lib/releases/tag/${{ needs.version.outputs.new_version }}) 
