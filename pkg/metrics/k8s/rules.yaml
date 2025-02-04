@@ -1,0 +1,114 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: terraorbit-rules
+  labels:
+    app: terraorbit
+    release: prometheus
+spec:
+  groups:
+    - name: terraorbit.service.rules
+      interval: 30s
+      rules:
+        # Recording rules for HTTP metrics
+        - record: job:http_requests_total:rate5m
+          expr: |
+            sum by (job, service, endpoint) (
+              rate(http_requests_total[5m])
+            )
+        - record: job:http_request_duration_seconds:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (job, service, endpoint, le) (
+                rate(http_request_duration_seconds_bucket[5m])
+              )
+            )
+
+        # Recording rules for error rates
+        - record: job:http_errors:rate5m
+          expr: |
+            sum by (job, service) (
+              rate(http_requests_total{status_code=~"5.."}[5m])
+            )
+            /
+            sum by (job, service) (
+              rate(http_requests_total[5m])
+            )
+
+    - name: terraorbit.alerts
+      rules:
+        # High error rate alert
+        - alert: HighErrorRate
+          expr: |
+            job:http_errors:rate5m > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: High HTTP error rate
+            description: "{{ $labels.service }} is experiencing {{ $value | humanizePercentage }} error rate"
+
+        # Service health alert
+        - alert: ServiceUnhealthy
+          expr: |
+            service_health_status == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Service is unhealthy
+            description: "{{ $labels.service }} instance {{ $labels.instance }} is reporting as unhealthy"
+
+        # High latency alert
+        - alert: HighLatency
+          expr: |
+            job:http_request_duration_seconds:p95 > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: High latency detected
+            description: "{{ $labels.service }} endpoint {{ $labels.endpoint }} p95 latency is {{ $value }}s"
+
+        # Resource alerts
+        - alert: HighCPUUsage
+          expr: |
+            cpu_usage_percent > 80
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: High CPU usage
+            description: "{{ $labels.service }} is using {{ $value | humanizePercentage }} CPU"
+
+        - alert: HighMemoryUsage
+          expr: |
+            memory_usage_bytes / memory_total_bytes > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: High memory usage
+            description: "{{ $labels.service }} is using {{ $value | humanizePercentage }} of available memory"
+
+        # Database connection alerts
+        - alert: HighDBConnections
+          expr: |
+            db_connections_in_use / db_connections_total > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: High database connection usage
+            description: "{{ $labels.service }} is using {{ $value | humanizePercentage }} of available DB connections"
+
+        # Cache effectiveness alerts
+        - alert: LowCacheHitRate
+          expr: |
+            rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Low cache hit rate
+            description: "{{ $labels.service }} cache hit rate is {{ $value | humanizePercentage }}" 
