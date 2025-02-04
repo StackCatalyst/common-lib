@@ -7,8 +7,10 @@ import (
 
 // Reporter handles metrics reporting
 type Reporter struct {
-	registry prometheus.Registerer
-	factory  promauto.Factory
+	registry  prometheus.Registerer
+	factory   promauto.Factory
+	namespace string
+	subsystem string
 }
 
 // Options configures the metrics reporter
@@ -38,8 +40,10 @@ func New(opts Options) *Reporter {
 
 	factory := promauto.With(opts.Registry)
 	return &Reporter{
-		registry: opts.Registry,
-		factory:  factory,
+		registry:  opts.Registry,
+		factory:   factory,
+		namespace: opts.Namespace,
+		subsystem: opts.Subsystem,
 	}
 }
 
@@ -47,8 +51,10 @@ func New(opts Options) *Reporter {
 func (r *Reporter) Counter(name, help string, labels []string) *prometheus.CounterVec {
 	return r.factory.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: name,
-			Help: help,
+			Namespace: r.namespace,
+			Subsystem: r.subsystem,
+			Name:      name,
+			Help:      help,
 		},
 		labels,
 	)
@@ -58,8 +64,10 @@ func (r *Reporter) Counter(name, help string, labels []string) *prometheus.Count
 func (r *Reporter) Gauge(name, help string, labels []string) *prometheus.GaugeVec {
 	return r.factory.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: name,
-			Help: help,
+			Namespace: r.namespace,
+			Subsystem: r.subsystem,
+			Name:      name,
+			Help:      help,
 		},
 		labels,
 	)
@@ -69,9 +77,11 @@ func (r *Reporter) Gauge(name, help string, labels []string) *prometheus.GaugeVe
 func (r *Reporter) Histogram(name, help string, labels []string, buckets []float64) *prometheus.HistogramVec {
 	return r.factory.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    name,
-			Help:    help,
-			Buckets: buckets,
+			Namespace: r.namespace,
+			Subsystem: r.subsystem,
+			Name:      name,
+			Help:      help,
+			Buckets:   buckets,
 		},
 		labels,
 	)
@@ -81,6 +91,8 @@ func (r *Reporter) Histogram(name, help string, labels []string, buckets []float
 func (r *Reporter) Summary(name, help string, labels []string, objectives map[float64]float64) *prometheus.SummaryVec {
 	return r.factory.NewSummaryVec(
 		prometheus.SummaryOpts{
+			Namespace:  r.namespace,
+			Subsystem:  r.subsystem,
 			Name:       name,
 			Help:       help,
 			Objectives: objectives,

@@ -10,7 +10,8 @@ import (
 
 func TestRetryableError(t *testing.T) {
 	err := New(ErrInternal, "test error")
-	retryable := NewRetryable(err, 3, time.Second)
+	retryDuration := 100 * time.Millisecond // Use a shorter duration for tests
+	retryable := NewRetryable(err, 3, retryDuration)
 
 	// Initial state
 	assert.True(t, retryable.CanRetry())
@@ -18,15 +19,19 @@ func TestRetryableError(t *testing.T) {
 
 	// After first attempt
 	retryable.Attempt()
-	assert.False(t, retryable.CanRetry()) // Should wait for retry after duration
+	assert.False(t, retryable.CanRetry()) // Should be false immediately after attempt
 	assert.Equal(t, 1, retryable.RetryCount)
 
-	// After waiting
-	time.Sleep(time.Second)
+	// After waiting for retry duration
+	time.Sleep(retryDuration + 10*time.Millisecond) // Add a small buffer
 	assert.True(t, retryable.CanRetry())
 
-	// After max retries
+	// After second attempt
 	retryable.Attempt()
+	time.Sleep(retryDuration + 10*time.Millisecond) // Wait after second attempt
+	assert.True(t, retryable.CanRetry())
+
+	// After third attempt (max retries)
 	retryable.Attempt()
 	assert.False(t, retryable.CanRetry())
 	assert.Equal(t, 3, retryable.RetryCount)

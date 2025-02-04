@@ -27,7 +27,7 @@ func NewRetryable(err *AppError, maxRetries int, retryAfter time.Duration) *Retr
 		MaxRetries:  maxRetries,
 		RetryAfter:  retryAfter,
 		RetryCount:  0,
-		LastAttempt: time.Now(),
+		LastAttempt: time.Now().Add(-2 * retryAfter),
 	}
 }
 

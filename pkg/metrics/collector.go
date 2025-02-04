@@ -131,7 +131,7 @@ func (c *MetricsCollector) collect(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := c.resources.Collect(ctx); err != nil {
+			if err := c.resources.CollectMetrics(ctx); err != nil {
 				fmt.Printf("Error collecting resource metrics: %v\n", err)
 			}
 

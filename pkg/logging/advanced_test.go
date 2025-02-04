@@ -24,8 +24,8 @@ func TestAdvancedLogger(t *testing.T) {
 	// Create advanced config
 	cfg := DefaultAdvancedConfig()
 	cfg.OutputPath = filepath.Join(tmpDir, "test.log")
-	cfg.MaxSize = 1
-	cfg.MaxBackups = 2
+	cfg.MaxSize = 1    // 1MB max size
+	cfg.MaxBackups = 2 // Keep 2 backups
 	cfg.Compress = true
 
 	// Create logger
@@ -33,18 +33,48 @@ func TestAdvancedLogger(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, logger)
 
-	// Test log rotation
-	for i := 0; i < 1000; i++ {
-		logger.Info("Test log rotation", zapcore.Field{
-			Key: "data", Type: zapcore.StringType,
-			String: "some very long string to help trigger rotation",
-		})
+	// Generate large log entries to trigger rotation
+	largeData := make([]byte, 100*1024) // 100KB of data
+	for i := range largeData {
+		largeData[i] = byte('a' + (i % 26))
 	}
+	largeString := string(largeData)
+
+	// Write enough data to trigger multiple rotations
+	for i := 0; i < 20; i++ {
+		logger.Info("Test log rotation",
+			zapcore.Field{
+				Key:     "iteration",
+				Type:    zapcore.Int64Type,
+				Integer: int64(i),
+			},
+			zapcore.Field{
+				Key:    "data",
+				Type:   zapcore.StringType,
+				String: largeString,
+			},
+		)
+	}
+
+	// Sync to ensure all data is written
+	logger.Sync()
 
 	// Check if log files were created and rotated
 	files, err := os.ReadDir(tmpDir)
 	require.NoError(t, err)
+
+	// We should have the current log file plus backups
 	assert.True(t, len(files) > 1, "Expected multiple log files due to rotation")
+
+	// Verify at least one backup file is compressed
+	hasCompressedBackup := false
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".gz" {
+			hasCompressedBackup = true
+			break
+		}
+	}
+	assert.True(t, hasCompressedBackup, "Expected at least one compressed backup file")
 }
 
 func TestWithTracing(t *testing.T) {

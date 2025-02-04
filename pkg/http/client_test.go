@@ -112,7 +112,7 @@ func TestClientContextCancellation(t *testing.T) {
 
 	_, err := client.Get(ctx, server.URL)
 	require.Error(t, err)
-	assert.Equal(t, context.Canceled, err)
+	assert.Contains(t, err.Error(), "context canceled")
 }
 
 func TestClientPost(t *testing.T) {

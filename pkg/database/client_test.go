@@ -134,21 +134,19 @@ func TestNewClient(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid config",
+			name: "valid_config",
 			config: Config{
 				Host:     "localhost",
 				Port:     5432,
+				User:     "postgres",
+				Password: "postgres",
 				Database: "test",
-				User:     "user",
-				Password: "pass",
-				SSLMode:  "disable",
 				MaxConns: 4,
-				MinConns: 0,
 			},
-			wantErr: true, // Will fail because no actual database is running
+			wantErr: false,
 		},
 		{
-			name: "invalid config",
+			name: "invalid_config",
 			config: Config{
 				Host: "localhost",
 				Port: 5432,
@@ -166,7 +164,9 @@ func TestNewClient(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, client)
-				client.Close()
+				if client != nil {
+					client.Close()
+				}
 			}
 		})
 	}

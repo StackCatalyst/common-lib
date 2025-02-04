@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDefaultOptions(t *testing.T) {
+func TestReporterDefaultOptions(t *testing.T) {
 	opts := DefaultOptions()
 	assert.Equal(t, "terraorbit", opts.Namespace)
 	assert.Empty(t, opts.Subsystem)
 	assert.Equal(t, prometheus.DefaultRegisterer, opts.Registry)
 }
 
-func TestMetricCreation(t *testing.T) {
+func TestReporterMetricCreation(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	reporter := New(Options{
 		Namespace: "test",

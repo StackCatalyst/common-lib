@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,21 +30,29 @@ type ResourceMetrics struct {
 
 // NewServiceHealth creates a new service health metrics collector
 func NewServiceHealth(r *Reporter) *ServiceHealth {
+	status := r.Gauge(
+		"service_health_status",
+		"Current health status of the service (0: unhealthy, 1: healthy)",
+		[]string{"service", "instance"},
+	)
+
+	uptimeVec := r.Gauge(
+		"service_uptime_seconds",
+		"Time since service start in seconds",
+		[]string{},
+	)
+
+	lastCheckedVec := r.Gauge(
+		"service_health_last_checked_timestamp",
+		"Unix timestamp of the last health check",
+		[]string{},
+	)
+
 	return &ServiceHealth{
-		reporter: r,
-		status: r.Gauge(
-			"service_health_status",
-			"Current health status of the service (0: unhealthy, 1: healthy)",
-			[]string{"service", "instance"},
-		),
-		uptime: r.factory.NewGauge(prometheus.GaugeOpts{
-			Name: "service_uptime_seconds",
-			Help: "Time since service start in seconds",
-		}),
-		lastChecked: r.factory.NewGauge(prometheus.GaugeOpts{
-			Name: "service_health_last_checked_timestamp",
-			Help: "Unix timestamp of the last health check",
-		}),
+		reporter:    r,
+		status:      status,
+		uptime:      uptimeVec.WithLabelValues(),
+		lastChecked: lastCheckedVec.WithLabelValues(),
 	}
 }
 
@@ -64,36 +73,46 @@ func (h *ServiceHealth) UpdateUptime(startTime time.Time) {
 
 // NewResourceMetrics creates a new resource metrics collector
 func NewResourceMetrics(r *Reporter) *ResourceMetrics {
+	cpuUsage := r.Gauge(
+		"system_cpu_usage",
+		"CPU usage percentage per core",
+		[]string{"core"},
+	)
+
+	memoryUsage := r.Gauge(
+		"system_memory_usage",
+		"Memory usage statistics in bytes",
+		[]string{"type"},
+	)
+
+	goroutinesVec := r.Gauge(
+		"go_goroutines_current",
+		"Current number of goroutines",
+		[]string{},
+	)
+
+	allocatedMemVec := r.Gauge(
+		"go_memory_allocated_bytes",
+		"Currently allocated memory in bytes",
+		[]string{},
+	)
+
 	return &ResourceMetrics{
-		reporter: r,
-		cpuUsage: r.Gauge(
-			"system_cpu_usage",
-			"CPU usage percentage per core",
-			[]string{"core"},
-		),
-		memoryUsage: r.Gauge(
-			"system_memory_usage",
-			"Memory usage statistics in bytes",
-			[]string{"type"},
-		),
-		goroutines: r.factory.NewGauge(prometheus.GaugeOpts{
-			Name: "go_goroutines_current",
-			Help: "Current number of goroutines",
-		}),
-		allocatedMem: r.factory.NewGauge(prometheus.GaugeOpts{
-			Name: "go_memory_allocated_bytes",
-			Help: "Currently allocated memory in bytes",
-		}),
+		reporter:     r,
+		cpuUsage:     cpuUsage,
+		memoryUsage:  memoryUsage,
+		goroutines:   goroutinesVec.WithLabelValues(),
+		allocatedMem: allocatedMemVec.WithLabelValues(),
 	}
 }
 
-// Collect gathers all resource metrics
-func (rm *ResourceMetrics) Collect(ctx context.Context) error {
+// CollectMetrics gathers all resource metrics
+func (rm *ResourceMetrics) CollectMetrics(ctx context.Context) error {
 	// Collect CPU metrics
 	cpuPercent, err := cpu.PercentWithContext(ctx, 0, true)
 	if err == nil {
 		for i, usage := range cpuPercent {
-			rm.cpuUsage.WithLabelValues(string(i)).Set(usage)
+			rm.cpuUsage.WithLabelValues(strconv.Itoa(i)).Set(usage)
 		}
 	}
 
@@ -128,11 +147,14 @@ func NewCustomCollector(metrics []prometheus.Collector, collectFunc func(context
 	}
 }
 
+// Register registers the collector and its metrics with a registry
+func (c *CustomCollector) Register(registry prometheus.Registerer) error {
+	return registry.Register(c)
+}
+
 // Describe implements prometheus.Collector
 func (c *CustomCollector) Describe(ch chan<- *prometheus.Desc) {
-	for _, m := range c.metrics {
-		m.Describe(ch)
-	}
+	// Do nothing, as metrics are already registered by the reporter
 }
 
 // Collect implements prometheus.Collector
@@ -144,4 +166,44 @@ func (c *CustomCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, m := range c.metrics {
 		m.Collect(ch)
 	}
+}
+
+// Describe implements prometheus.Collector
+func (h *ServiceHealth) Describe(ch chan<- *prometheus.Desc) {
+	h.status.Describe(ch)
+	ch <- h.uptime.Desc()
+	ch <- h.lastChecked.Desc()
+}
+
+// Collect implements prometheus.Collector
+func (h *ServiceHealth) Collect(ch chan<- prometheus.Metric) {
+	h.status.Collect(ch)
+	ch <- h.uptime
+	ch <- h.lastChecked
+}
+
+// Register registers the collector with a registry
+func (h *ServiceHealth) Register(registry prometheus.Registerer) error {
+	return registry.Register(h)
+}
+
+// Describe implements prometheus.Collector
+func (rm *ResourceMetrics) Describe(ch chan<- *prometheus.Desc) {
+	rm.cpuUsage.Describe(ch)
+	rm.memoryUsage.Describe(ch)
+	ch <- rm.goroutines.Desc()
+	ch <- rm.allocatedMem.Desc()
+}
+
+// Collect implements prometheus.Collector
+func (rm *ResourceMetrics) Collect(ch chan<- prometheus.Metric) {
+	rm.cpuUsage.Collect(ch)
+	rm.memoryUsage.Collect(ch)
+	ch <- rm.goroutines
+	ch <- rm.allocatedMem
+}
+
+// Register registers the collector with a registry
+func (rm *ResourceMetrics) Register(registry prometheus.Registerer) error {
+	return registry.Register(rm)
 }

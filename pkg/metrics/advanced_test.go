@@ -11,6 +11,7 @@ import (
 )
 
 func TestServiceHealth(t *testing.T) {
+	// Create a new registry for this test
 	registry := prometheus.NewRegistry()
 	reporter := New(Options{
 		Namespace: "test",
@@ -28,7 +29,7 @@ func TestServiceHealth(t *testing.T) {
 	startTime := time.Now().Add(-time.Hour)
 	health.UpdateUptime(startTime)
 
-	// Collect metrics
+	// Gather metrics
 	metrics, err := registry.Gather()
 	require.NoError(t, err)
 
@@ -67,6 +68,7 @@ func TestServiceHealth(t *testing.T) {
 }
 
 func TestResourceMetrics(t *testing.T) {
+	// Create a new registry for this test
 	registry := prometheus.NewRegistry()
 	reporter := New(Options{
 		Namespace: "test",
@@ -77,7 +79,7 @@ func TestResourceMetrics(t *testing.T) {
 	require.NotNil(t, resources)
 
 	// Collect metrics
-	err := resources.Collect(context.Background())
+	err := resources.CollectMetrics(context.Background())
 	require.NoError(t, err)
 
 	// Gather metrics
@@ -123,16 +125,16 @@ func TestResourceMetrics(t *testing.T) {
 }
 
 func TestCustomCollector(t *testing.T) {
+	// Create a new registry for this test
 	registry := prometheus.NewRegistry()
-	reporter := New(Options{
-		Namespace: "test",
-		Registry:  registry,
-	})
 
-	// Create a test metric
-	testMetric := reporter.Gauge(
-		"custom_metric",
-		"A test custom metric",
+	// Create a test metric directly
+	testMetric := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "test",
+			Name:      "custom_metric",
+			Help:      "A test custom metric",
+		},
 		[]string{"label"},
 	)
 
@@ -148,7 +150,7 @@ func TestCustomCollector(t *testing.T) {
 	)
 
 	// Register the collector
-	err := registry.Register(collector)
+	err := collector.Register(registry)
 	require.NoError(t, err)
 
 	// Gather metrics
