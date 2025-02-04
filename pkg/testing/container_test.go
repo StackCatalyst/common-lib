@@ -93,7 +93,7 @@ func TestContainer(t *testing.T) {
 
 	t.Run("Kafka", func(t *testing.T) {
 		config := KafkaConfig{
-			Version:    "3.5",
+			Version:    "7.5.1",
 			BrokerPort: "9092/tcp",
 			ZookerPort: "2181/tcp",
 			Topics:     []string{"test-topic"},

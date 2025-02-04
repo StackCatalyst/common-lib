@@ -172,7 +172,7 @@ type KafkaConfig struct {
 // KafkaContainer creates a Kafka test container with Zookeeper
 func KafkaContainer(ctx context.Context, config KafkaConfig) (*Container, error) {
 	if config.Version == "" {
-		config.Version = "3.5"
+		config.Version = "7.5.1"
 	}
 	if config.BrokerPort == "" {
 		config.BrokerPort = "9092/tcp"
