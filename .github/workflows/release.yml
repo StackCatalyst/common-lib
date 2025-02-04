@@ -41,13 +41,24 @@ jobs:
       - name: Get latest tag
         id: latest_tag
         run: |
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "latest_tag=${latest_tag}" >> $GITHUB_OUTPUT
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.2.1")
+          # If no tag exists, we want to start with v1.2.1 but not create changelog from beginning
+          if [ "$latest_tag" = "v1.2.1" ] && ! git rev-parse "v1.2.1" >/dev/null 2>&1; then
+            echo "latest_tag=HEAD" >> $GITHUB_OUTPUT
+            echo "initial_version=true" >> $GITHUB_OUTPUT
+          else
+            echo "latest_tag=${latest_tag}" >> $GITHUB_OUTPUT
+            echo "initial_version=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate changelog
         id: changelog
         run: |
-          changelog=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"- %s%n%b")
+          if [ "${{ steps.latest_tag.outputs.initial_version }}" = "true" ]; then
+            changelog="Initial release v1.2.1"
+          else
+            changelog=$(git log ${{ steps.latest_tag.outputs.latest_tag }}..HEAD --pretty=format:"- %s%n%b")
+          fi
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$changelog" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -55,6 +66,12 @@ jobs:
       - name: Determine version bump
         id: semver
         run: |
+          if [ "${{ steps.latest_tag.outputs.initial_version }}" = "true" ]; then
+            echo "new_version=v1.2.1" >> $GITHUB_OUTPUT
+            echo "version_changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           latest_version=${{ steps.latest_tag.outputs.latest_tag }}
           latest_version=${latest_version#v}
           
