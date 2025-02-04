@@ -114,14 +114,39 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Update Changelog
+        if: needs.version.outputs.version_changed == 'true'
+        run: |
+          # Get current date
+          release_date=$(date +%Y-%m-%d)
+          
+          # Create new version section from Unreleased
+          sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n### Added\n- None\n\n### Changed\n- None\n\n### Deprecated\n- None\n\n### Removed\n- None\n\n### Fixed\n- None\n\n### Security\n- None\n\n## [${{ needs.version.outputs.new_version }}] - ${release_date}/" CHANGELOG.md
+          
+          # Update links at the bottom of the file
+          if ! grep -q "\[Unreleased\]:" CHANGELOG.md; then
+            echo -e "\n[Unreleased]: https://github.com/StackCatalyst/common-lib/compare/${{ needs.version.outputs.new_version }}...HEAD" >> CHANGELOG.md
+            echo "[${{ needs.version.outputs.new_version }}]: https://github.com/StackCatalyst/common-lib/releases/tag/${{ needs.version.outputs.new_version }}" >> CHANGELOG.md
+          else
+            # Update existing links
+            sed -i "/\[Unreleased\]/c\[Unreleased\]: https://github.com/StackCatalyst/common-lib/compare/${{ needs.version.outputs.new_version }}...HEAD" CHANGELOG.md
+            sed -i "/^\[${{ needs.version.outputs.new_version }}/d" CHANGELOG.md
+            sed -i "/\[Unreleased\]/a\[${{ needs.version.outputs.new_version }}]: https://github.com/StackCatalyst/common-lib/releases/tag/${{ needs.version.outputs.new_version }}" CHANGELOG.md
+          fi
+          
+          # Commit and push the updated changelog
+          git add CHANGELOG.md
+          git commit -m "docs: update changelog for ${{ needs.version.outputs.new_version }}"
+          git push origin main
+
       - name: Create Release Notes
         id: release_notes
         run: |
-          cat << EOF > release_notes.md
-          # Release ${{ needs.version.outputs.new_version }}
+          # Extract the current version's changes from CHANGELOG.md
+          awk '/^## \[${{ needs.version.outputs.new_version }}\]/{p=1;print;next} /^## \[/{p=0} p{print}' CHANGELOG.md > release_notes.md
           
-          ## Changes
-          ${{ needs.version.outputs.changelog }}
+          # Append installation and documentation information
+          cat << EOF >> release_notes.md
           
           ## Installation
           \`\`\`bash
@@ -130,15 +155,6 @@ jobs:
           
           ## Documentation
           See [Integration Guide](docs/INTEGRATION.md) for usage instructions.
-          
-          ## Breaking Changes
-          $(echo "${{ needs.version.outputs.changelog }}" | grep "BREAKING CHANGE:" || echo "None")
-          
-          ## Features
-          $(echo "${{ needs.version.outputs.changelog }}" | grep "^feat:" || echo "None")
-          
-          ## Bug Fixes
-          $(echo "${{ needs.version.outputs.changelog }}" | grep "^fix:" || echo "None")
           EOF
 
       - name: Create Tag
