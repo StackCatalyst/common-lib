@@ -169,16 +169,13 @@ type KafkaConfig struct {
 	ExternalIP string // for advertised listeners
 }
 
-// KafkaContainer creates a Kafka test container with Zookeeper
+// KafkaContainer creates a Kafka test container with KRaft mode
 func KafkaContainer(ctx context.Context, config KafkaConfig) (*Container, error) {
 	if config.Version == "" {
 		config.Version = "7.5.1"
 	}
 	if config.BrokerPort == "" {
 		config.BrokerPort = "9092/tcp"
-	}
-	if config.ZookerPort == "" {
-		config.ZookerPort = "2181/tcp"
 	}
 	if config.Partitions == 0 {
 		config.Partitions = 1
@@ -194,23 +191,22 @@ func KafkaContainer(ctx context.Context, config KafkaConfig) (*Container, error)
 		Image: "confluentinc/cp-kafka",
 		Tag:   config.Version,
 		Env: map[string]string{
-			"KAFKA_BROKER_ID":                                "1",
-			"KAFKA_ZOOKEEPER_CONNECT":                        "localhost:2181",
-			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":           "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT",
-			"KAFKA_ADVERTISED_LISTENERS":                     fmt.Sprintf("PLAINTEXT://%s:%s,PLAINTEXT_HOST://localhost:%s", config.ExternalIP, config.BrokerPort, config.BrokerPort),
-			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR":         "1",
-			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS":         "0",
-			"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR":            "1",
-			"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": "1",
-			"KAFKA_AUTO_CREATE_TOPICS_ENABLE":                "true",
-			"KAFKA_NUM_PARTITIONS":                           fmt.Sprintf("%d", config.Partitions),
-			"KAFKA_DEFAULT_REPLICATION_FACTOR":               fmt.Sprintf("%d", config.Replicas),
+			"KAFKA_NODE_ID":                          "1",
+			"KAFKA_CONTROLLER_QUORUM_VOTERS":         "1@localhost:9093",
+			"KAFKA_PROCESS_ROLES":                    "broker,controller",
+			"KAFKA_CONTROLLER_LISTENER_NAMES":        "CONTROLLER",
+			"KAFKA_LISTENERS":                        "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093",
+			"KAFKA_ADVERTISED_LISTENERS":             "PLAINTEXT://localhost:9092",
+			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":   "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+			"KAFKA_INTER_BROKER_LISTENER_NAME":       "PLAINTEXT",
+			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR": "1",
+			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS": "0",
+			"CLUSTER_ID":                             "MkU3OEVBNTcwNTJENDM2Qk",
 		},
 		Ports: map[string]string{
 			config.BrokerPort: "",
-			config.ZookerPort: "",
 		},
-		WaitStrategy: wait.ForLog("[KafkaServer id=1] started"),
+		WaitStrategy: wait.ForLog("[KafkaRaftServer nodeId=1] Kafka Server started"),
 	}
 	return NewContainer(ctx, containerConfig)
 }
