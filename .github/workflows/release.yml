@@ -39,9 +39,38 @@ jobs:
           path: coverage.html
           retention-days: 7
 
+  sonarcloud:
+    name: SonarCloud Analysis
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better relevancy of analysis
+      
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+      
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Generate a token on SonarCloud.io
+        with:
+          args: >
+            -Dsonar.organization=stackcatalyst
+            -Dsonar.projectKey=StackCatalyst_common-lib
+            -Dsonar.sources=.
+            -Dsonar.go.coverage.reportPaths=coverage.txt
+            -Dsonar.go.tests.reportPaths=coverage.out
+            -Dsonar.exclusions=**/*_test.go
+            -Dsonar.test.inclusions=**/*_test.go
+
   version:
     name: Determine Version
-    needs: test
+    needs: [test, sonarcloud]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
