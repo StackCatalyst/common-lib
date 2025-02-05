@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- None
+
+### Changed
+- None
+
+### Deprecated
+- None
+
+### Removed
+- None
+
+### Fixed
+- None
+
+### Security
+- None
+
+## [v1.2.1] - 2025-02-05
+
+### Added
 - Prometheus metrics integration
   - Metrics collection setup
   - Service discovery configuration
@@ -70,3 +90,5 @@ Initial release
   - HTTP client with retries
   - gRPC framework
   - Middleware support 
+[Unreleased]: https://github.com/StackCatalyst/common-lib/compare/v1.2.1...HEAD
+[v1.2.1]: https://github.com/StackCatalyst/common-lib/releases/tag/v1.2.1
