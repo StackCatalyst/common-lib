@@ -41,7 +41,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
-            -Dsonar.organization=stackcatalyst
+            -Dsonar.organization=InfraForge
             -Dsonar.projectKey=StackCatalyst_common-lib
             -Dsonar.sources=.
             -Dsonar.go.coverage.reportPaths=coverage.txt
