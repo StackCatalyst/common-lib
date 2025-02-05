@@ -67,6 +67,10 @@ jobs:
             -Dsonar.go.tests.reportPaths=coverage.out
             -Dsonar.exclusions=**/*_test.go
             -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.scm.provider=git
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.analysis.mode=publish
 
   version:
     name: Determine Version
