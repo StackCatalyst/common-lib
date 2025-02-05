@@ -103,13 +103,22 @@ type PostgresConfig struct {
 	Port     string // defaults to 5432/tcp
 }
 
-// PostgresContainer creates a PostgreSQL test container with advanced configuration
+// PostgresContainer creates a PostgreSQL test container
 func PostgresContainer(ctx context.Context, config PostgresConfig) (*Container, error) {
 	if config.Version == "" {
-		config.Version = "14-alpine"
+		config.Version = "16-alpine"
 	}
 	if config.Port == "" {
 		config.Port = "5432/tcp"
+	}
+	if config.Database == "" {
+		config.Database = "test"
+	}
+	if config.User == "" {
+		config.User = "test"
+	}
+	if config.Password == "" {
+		config.Password = "test"
 	}
 
 	containerConfig := ContainerConfig{
@@ -125,6 +134,7 @@ func PostgresContainer(ctx context.Context, config PostgresConfig) (*Container, 
 		},
 		WaitStrategy: wait.ForLog("database system is ready to accept connections"),
 	}
+
 	return NewContainer(ctx, containerConfig)
 }
 
@@ -162,7 +172,6 @@ func LocalstackContainer(ctx context.Context, services []string) (*Container, er
 type KafkaConfig struct {
 	Version    string // e.g., "3.5", "3.6"
 	BrokerPort string // defaults to 9092/tcp
-	ZookerPort string // defaults to 2181/tcp
 	Topics     []string
 	Partitions int
 	Replicas   int
@@ -191,22 +200,26 @@ func KafkaContainer(ctx context.Context, config KafkaConfig) (*Container, error)
 		Image: "confluentinc/cp-kafka",
 		Tag:   config.Version,
 		Env: map[string]string{
-			"KAFKA_NODE_ID":                          "1",
-			"KAFKA_CONTROLLER_QUORUM_VOTERS":         "1@localhost:9093",
-			"KAFKA_PROCESS_ROLES":                    "broker,controller",
-			"KAFKA_CONTROLLER_LISTENER_NAMES":        "CONTROLLER",
-			"KAFKA_LISTENERS":                        "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093",
-			"KAFKA_ADVERTISED_LISTENERS":             "PLAINTEXT://localhost:9092",
-			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":   "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
-			"KAFKA_INTER_BROKER_LISTENER_NAME":       "PLAINTEXT",
-			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR": "1",
-			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS": "0",
-			"CLUSTER_ID":                             "MkU3OEVBNTcwNTJENDM2Qk",
+			"KAFKA_NODE_ID":                                  "1",
+			"KAFKA_CONTROLLER_QUORUM_VOTERS":                 "1@localhost:9093",
+			"KAFKA_PROCESS_ROLES":                            "broker,controller",
+			"KAFKA_CONTROLLER_LISTENER_NAMES":                "CONTROLLER",
+			"KAFKA_LISTENERS":                                "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093",
+			"KAFKA_ADVERTISED_LISTENERS":                     "PLAINTEXT://localhost:9092",
+			"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":           "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+			"KAFKA_INTER_BROKER_LISTENER_NAME":               "PLAINTEXT",
+			"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR":         "1",
+			"KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS":         "0",
+			"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": "1",
+			"KAFKA_AUTO_CREATE_TOPICS_ENABLE":                "true",
+			"CLUSTER_ID":                                     "MkU3OEVBNTcwNTJENDM2Qk",
 		},
 		Ports: map[string]string{
-			config.BrokerPort: "",
+			"9092/tcp": "",
+			"9093/tcp": "",
 		},
 		WaitStrategy: wait.ForLog("[KafkaRaftServer nodeId=1] Kafka Server started"),
 	}
+
 	return NewContainer(ctx, containerConfig)
 }
