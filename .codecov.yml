@@ -1,0 +1,23 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+        threshold: 1%
+        paths:
+          - "pkg/"
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+ignore:
+  - "examples/"
+  - "**/*_test.go"
+  - "**/mock_*.go"
+  - "**/testdata/"
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: true 

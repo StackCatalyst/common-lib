@@ -21,8 +21,31 @@ jobs:
           go-version: '1.23.3'
           cache: true
       
-      - name: Run tests
-        run: go test -v ./...
+      - name: Run tests with coverage
+        run: |
+          go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... ./...
+          go tool cover -func=coverage.txt | tee coverage.out
+          COVERAGE=$(tail -1 coverage.out | awk '{print $3}' | sed 's/%//')
+          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+            echo "Code coverage is below 70%"
+            exit 1
+          fi
+          go tool cover -html=coverage.txt -o coverage.html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
+          retention-days: 7
 
   version:
     name: Determine Version

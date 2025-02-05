@@ -154,6 +154,8 @@ go test ./pkg/config -v
 
 This project is proprietary software owned by StackCatalyst. All rights reserved. See the LICENSE file for details.
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/StackCatalyst/common-lib)](https://goreportcard.com/report/github.com/StackCatalyst/common-lib)
+[![codecov](https://codecov.io/gh/StackCatalyst/common-lib/branch/main/graph/badge.svg)](https://codecov.io/gh/StackCatalyst/common-lib)
 
 Setting up Prometheus integration for advanced metrics collection
 Implementing Jaeger tracing for distributed system monitoring
