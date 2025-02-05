@@ -214,14 +214,21 @@ jobs:
         with:
           github-token: ${{ github.token }}
           webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          title: "New Release: common-lib ${{ needs.version.outputs.new_version }}"
-          color: "00ff00"
-          description: |
-            A new version of common-lib has been released!
-            
-            **Version:** ${{ needs.version.outputs.new_version }}
-            
-            **Changes:**
-            ${{ needs.version.outputs.changelog }}
-            
-            [View Release Notes](https://github.com/StackCatalyst/common-lib/releases/tag/${{ needs.version.outputs.new_version }}) 
+          custom-facts: |
+            [
+              {
+                "name": "Version",
+                "value": "${{ needs.version.outputs.new_version }}"
+              },
+              {
+                "name": "Changes",
+                "value": "${{ needs.version.outputs.changelog }}"
+              }
+            ]
+          custom-actions: |
+            [
+              {
+                "text": "View Release Notes",
+                "url": "https://github.com/StackCatalyst/common-lib/releases/tag/${{ needs.version.outputs.new_version }}"
+              }
+            ] 
