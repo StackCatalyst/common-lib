@@ -211,6 +211,8 @@ jobs:
     steps:
       - name: Send MS Teams notification
         uses: toko-bifrost/ms-teams-deploy-card@master
+        if: success()
+        continue-on-error: true
         with:
           github-token: ${{ github.token }}
           webhook-uri: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
